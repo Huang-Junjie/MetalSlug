@@ -11,7 +11,7 @@ public:
 	virtual bool init();
 
 	void update(float f);
-
+	void enemyAction(float f);
 	void addKeyboardListener();
 
 	void onKeyPressed(EventKeyboard::KeyCode code, Event* event);
@@ -33,7 +33,8 @@ public:
 	void generateObstacle();	// 生成障碍物
 	void generateHostage();		// 生成人质
 	void generateEnemy();		// 生成敌人
-	void enemyAutoAttack();	// 敌人自动攻击
+	void testGetShot();			// 检测玩家是否中弹
+	void removeEnemy();			//移除屏幕外一定距离的敌人
 
 	// implement the "static create()" method manually
 	CREATE_FUNC(GameScene);
@@ -55,6 +56,7 @@ private:
 	Vector<Sprite*> woodenBarrels;			// 木桶
 	Vector<Sprite*> ironDrums;				// 铁桶
 	Vector<Sprite*> bullets;				// 子弹
+	std::list<Sprite*> enemyBullets;			//敌人子弹
 
 	bool isMove;
 	bool isAttack;

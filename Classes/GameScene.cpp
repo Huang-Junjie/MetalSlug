@@ -1,6 +1,7 @@
 #include "GameScene.h"
 #include "cocos2d.h"
 #include "SimpleAudioEngine.h"
+#pragma execution_character_set("utf-8")
 
 USING_NS_CC;
 
@@ -37,15 +38,15 @@ bool GameScene::init() {
 	player_head = Sprite::create("player_head.png");
 	player_leg = Sprite::create("player_leg.png");
 
-	player_leg->setPosition(Vec2(origin.x + 100, origin.y + player_leg->getContentSize().height / 2));
+	player_leg->setPosition(Vec2(origin.x + 100, origin.y + player_leg->getContentSize().height / 2 + 50));
 	player_head->setPosition(Vec2(player_leg->getPositionX() + 5,
 		player_leg->getPositionY() + player_head->getContentSize().height / 2));
 
 	player_head->setFlipX(true);
 	player_leg->setFlipX(true);
 
-	this->addChild(player_leg, 1);
-	this->addChild(player_head, 1);	
+	this->addChild(player_leg, 2);
+	this->addChild(player_head, 2);	
 
 	// 初始化变量
 	lastCid = 'D';
@@ -55,11 +56,12 @@ bool GameScene::init() {
 
 	generateObstacle();
 	generateHostage();
-	generateEnemy();
 
 	addKeyboardListener();
 
 	schedule(schedule_selector(GameScene::update), 0.05f, kRepeatForever, 0);
+	
+	schedule(schedule_selector(GameScene::enemyAction), 1.6f, kRepeatForever, 0);
 
 	return true;
 }
@@ -287,18 +289,18 @@ void GameScene::initSpriteFrame() {
 	auto moveBy = MoveBy::create(0.8f, Vec2(-10, 0));
 	auto r = AnimationCache::getInstance()->getAnimation("enemy_run");
 	auto enemy_run = Animate::create(r);
-	enmey->runAction(Spawn::createWithTwoActions(moveBy, enemy_run));
+	enemy->runAction(Spawn::createWithTwoActions(moveBy, enemy_run));
 	*******************************************************************************/
 
 	// 敌人射击
 	// enemy shoot
 	auto enemy_shoot = Animation::create();
-	for (int i = 0; i < 11; i++) {
+	for (int i = 3; i < 11; i++) {
 		char szName[100] = { 0 };
 		sprintf(szName, "enemy_shoot_%d.png", i);
 		enemy_shoot->addSpriteFrameWithFile(szName);
 	}
-	enemy_shoot->setDelayPerUnit(0.15f);
+	enemy_shoot->setDelayPerUnit(0.2f);
 	AnimationCache::getInstance()->addAnimation(enemy_shoot, "enemy_shoot");
 
 	// 敌人出刀
@@ -309,7 +311,7 @@ void GameScene::initSpriteFrame() {
 		sprintf(szName, "enemy_stab_%d.png", i);
 		enemy_stab->addSpriteFrameWithFile(szName);
 	}
-	enemy_stab->setDelayPerUnit(0.15f);
+	enemy_stab->setDelayPerUnit(0.2f);
 	AnimationCache::getInstance()->addAnimation(enemy_stab, "enemy_stab");
 
 	// 敌人死亡
@@ -333,25 +335,136 @@ void GameScene::generateObstacle() {
 }
 
 void GameScene::generateHostage() {
-	// one oldman for test
-	auto oldman = Sprite::create("oldman_0.png");
-	oldman->setPosition(Vec2(origin.x + 300, origin.y + 80 + oldman->getContentSize().height / 2));
-	this->addChild(oldman, 1);
-	hostages.pushBack(oldman);
-	
-	auto action = Animate::create(AnimationCache::getInstance()->getAnimation("oldman"));
-	oldman->runAction(RepeatForever::create(action));
+	for (int i = 0; i < 4; i++) {
+		auto oldman = Sprite::create("oldman_0.png");
+		oldman->setPosition(Vec2(origin.x + 200 + i * map0->getContentSize().width, origin.y + 50 + oldman->getContentSize().height / 2));
+		this->addChild(oldman, 1);
+		hostages.pushBack(oldman);
+
+		auto action = Animate::create(AnimationCache::getInstance()->getAnimation("oldman"));
+		oldman->runAction(RepeatForever::create(action));
+	}
+	for (int i = 0; i < 4; i++) {
+		auto oldman = Sprite::create("oldman_0.png");
+		oldman->setPosition(Vec2(origin.x + 500 + i * map0->getContentSize().width, origin.y + 50 + oldman->getContentSize().height / 2));
+		this->addChild(oldman, 1);
+		hostages.pushBack(oldman);
+
+		auto action = Animate::create(AnimationCache::getInstance()->getAnimation("oldman"));
+		oldman->runAction(RepeatForever::create(action));
+	}
 }
 
 void GameScene::generateEnemy() {
-	// one enemy for test
 	auto enemy = Sprite::create("enemy_0.png");
-	enemy->setPosition(Vec2(origin.x + 500, origin.y + 80 + enemy->getContentSize().height / 2));
+	//敌人随机从屏幕左边或右边出来, 2/3概率从右边出现
+	auto ifLeft = (cocos2d::random(0, 2) == 0);
+	if (ifLeft) {
+		enemy->setPosition(Vec2(origin.x - 10 , origin.y + 50 + enemy->getContentSize().height / 2));
+		auto move = MoveBy::create(0.8f, Vec2(50, 0));
+		enemy->runAction(move);
+		enemy->setFlippedX(true);
+	}
+	else {
+		enemy->setPosition(Vec2(origin.x + visibleSize.width + 10, origin.y + 50 + enemy->getContentSize().height / 2));
+		auto move = MoveBy::create(0.8f, Vec2(-50, 0));
+		enemy->runAction(move);
+	}
+	auto r = AnimationCache::getInstance()->getAnimation("enemy_run");
+	auto enemy_run = Animate::create(r);
+	enemy->runAction(Sequence::create(enemy_run, CallFunc::create([=] {enemies.pushBack(enemy); }), nullptr));
 	this->addChild(enemy, 1);
-	enemies.pushBack(enemy);
 	
 	auto action2 = Animate::create(AnimationCache::getInstance()->getAnimation("enemy"));
 	enemy->runAction(RepeatForever::create(action2));
+}
+
+void GameScene::enemyAction(float f) {
+	//产生敌人
+	static int gtime = 0;
+	if (gtime == 0) {
+		generateEnemy();
+		gtime = 3;
+	}
+	gtime--;
+
+	for (auto enemy : enemies) {
+		//1/2概率攻击，1/2概率移动
+		bool attack= (cocos2d::random(0, 1) == 0);
+		//敌人攻击
+		if (attack) {
+			if (enemy->getPositionX() - player_head->getPositionX() < 60 && 
+				enemy->getPositionX() - player_head->getPositionX() > -60) {
+				unschedule(schedule_selector(GameScene::enemyAction));
+				auto enemy_stab = Animate::create(AnimationCache::getInstance()->getAnimation("enemy_stab"));
+				enemy->runAction(Sequence::create(
+					//敌人拔刀动画
+					enemy_stab,
+					CallFunc::create([=] {
+					//敌人拔完刀，玩家还在攻击范围内则游戏结束
+						if (enemy->getPositionX() - player_head->getPositionX() < 60 &&
+							enemy->getPositionX() - player_head->getPositionX() > -60) {
+							player_leg->setVisible(false);
+							auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("dead"));
+							player_head->runAction(Sequence::create(dead, CallFunc::create([=] {GameOver(); }), nullptr));
+						}
+					}),
+					nullptr
+				));
+				
+			}
+			else {
+				auto enemy_shoot = Animate::create(AnimationCache::getInstance()->getAnimation("enemy_shoot"));
+				enemy->runAction(Sequence::create(
+					enemy_shoot,
+					CallFunc::create([=] {
+						auto bullet = Sprite::create("bullet.png");
+						bullet->setFlippedX(enemy->isFlippedX());
+						int dir = bullet->isFlippedX() ? 1 : -1;
+						bullet->setPosition(enemy->getPosition());
+						addChild(bullet, 2);
+						enemyBullets.push_back(bullet);
+						bullet->runAction(Sequence::create(MoveBy::create(2, Vec2(visibleSize.width * dir, 0)),
+							CallFunc::create([=] { bullet->removeFromParentAndCleanup(true); enemyBullets.remove(bullet); }),
+							nullptr));
+					}),
+					nullptr)
+					);	
+			}
+			continue;
+		}
+
+		//敌人朝着玩家或远离玩家移动，4/5概率朝着玩家移动
+		auto ifAway = cocos2d::random(0, 4);
+		//移动距离系数
+		int dis = cocos2d::random(1, 8);
+		bool ifLeft;
+		if (player_head->getPositionX() > enemy->getPositionX()) {
+			ifLeft = (ifAway == 0);  //玩家在敌人右边时，敌人1/5概率向左移动
+		}
+		else {
+			ifLeft = (ifAway != 0);  //玩家在敌人左边时，敌人1/5概率向左移动
+		}
+		if (ifLeft) {
+			enemy->setFlippedX(false);
+			if (enemy->getPositionX() > origin.x) {
+				auto move = MoveBy::create(1.6f, Vec2(-10 * dis, 0));
+				enemy->runAction(move);
+			}
+		}
+		else {
+			enemy->setFlippedX(true);
+			if (enemy->getPositionX() < origin.x + visibleSize.width) {
+				auto move = MoveBy::create(1.6f, Vec2(10 * dis, 0));
+				enemy->runAction(move);
+			}
+		}
+		auto r = AnimationCache::getInstance()->getAnimation("enemy_run");
+		auto enemy_run = Animate::create(r);
+		enemy->runAction(Sequence::create(enemy_run, enemy_run->clone(), nullptr));
+		
+	}
+
 }
 
 void GameScene::update(float f) {
@@ -360,8 +473,11 @@ void GameScene::update(float f) {
 
 	if (isCrouch) crouch();
 
-	enemyAutoAttack();
-
+	//移除屏幕外一定距离的敌人
+	removeEnemy();
+	// 检测玩家是否中弹
+	testGetShot();
+	
 	// 自动移除飞出屏幕外的子弹
 	
 }
@@ -446,10 +562,27 @@ void GameScene::fireInTheHole() {
 	// 扔雷
 }
 
-void GameScene::enemyAutoAttack() {
-	// 根据判断是用刺刀还是枪
-	// 每隔一段时间会扔手雷
+void GameScene::testGetShot() {
+	for (auto bullet : enemyBullets) {
+		if (bullet->getPositionX() - player_head->getPositionX() < 50 &&
+			bullet->getPositionX() - player_head->getPositionX() > -50) {
+			player_leg->setVisible(false);
+			auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("dead"));
+			player_head->runAction(Sequence::create(dead, CallFunc::create([=] {GameOver(); }), nullptr));
+		}
+	}
 	
+}
+
+void GameScene::removeEnemy() {
+	for (auto enemy : enemies) {
+		if (enemy->getPositionX() < origin.x - 100 ||
+			enemy->getPositionX() > origin.x + visibleSize.width + 100) {
+			enemy->removeFromParentAndCleanup(true);
+			enemies.erase(enemies.getIndex(enemy));
+			break;
+		}
+	}
 }
 
 // 添加键盘事件监听器
@@ -524,23 +657,23 @@ void GameScene::GameOver() {
 	unschedule(schedule_selector(GameScene::update));
 
 	auto label1 = Label::createWithTTF("Game Over~", "fonts/STXINWEI.TTF", 60);
-	label1->setColor(Color3B(0, 0, 0));
+	label1->setColor(Color3B(255, 0, 0));
 	label1->setPosition(visibleSize.width / 2, visibleSize.height / 2);
-	this->addChild(label1);
+	this->addChild(label1, 3);
 
 	auto label2 = Label::createWithTTF("重玩", "fonts/STXINWEI.TTF", 40);
-	label2->setColor(Color3B(0, 0, 0));
+	label2->setColor(Color3B(255, 0, 0));
 	auto replayBtn = MenuItemLabel::create(label2, CC_CALLBACK_1(GameScene::replayCallback, this));
 	Menu* replay = Menu::create(replayBtn, NULL);
 	replay->setPosition(visibleSize.width / 2 - 80, visibleSize.height / 2 - 100);
-	this->addChild(replay);
+	this->addChild(replay, 3);
 
 	auto label3 = Label::createWithTTF("退出", "fonts/STXINWEI.TTF", 40);
-	label3->setColor(Color3B(0, 0, 0));
+	label3->setColor(Color3B(255, 0, 0));
 	auto exitBtn = MenuItemLabel::create(label3, CC_CALLBACK_1(GameScene::exitCallback, this));
 	Menu* exit = Menu::create(exitBtn, NULL);
 	exit->setPosition(visibleSize.width / 2 + 90, visibleSize.height / 2 - 100);
-	this->addChild(exit);
+	this->addChild(exit, 3);
 }
 
 // 继续或重玩按钮响应函数
