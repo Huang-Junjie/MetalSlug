@@ -344,21 +344,12 @@ void GameScene::generateObstacle() {
 }
 
 void GameScene::generateHostage() {
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 10; i++) {
 		auto oldman = Sprite::create("oldman_0.png");
-		oldman->setPosition(Vec2(origin.x + 200 + i * map0->getContentSize().width, origin.y + 50 + oldman->getContentSize().height / 2));
+		auto x = cocos2d::random(50.0, (double)(4 * map0->getContentSize().width - 50));
+		oldman->setPosition(Vec2(x, origin.y + 50 + oldman->getContentSize().height / 2));
 		this->addChild(oldman, 1);
 		hostages.pushBack(oldman);
-
-		auto action = Animate::create(AnimationCache::getInstance()->getAnimation("oldman"));
-		oldman->runAction(RepeatForever::create(action));
-	}
-	for (int i = 0; i < 4; i++) {
-		auto oldman = Sprite::create("oldman_0.png");
-		oldman->setPosition(Vec2(origin.x + 500 + i * map0->getContentSize().width, origin.y + 50 + oldman->getContentSize().height / 2));
-		this->addChild(oldman, 1);
-		hostages.pushBack(oldman);
-
 		auto action = Animate::create(AnimationCache::getInstance()->getAnimation("oldman"));
 		oldman->runAction(RepeatForever::create(action));
 	}
@@ -366,39 +357,54 @@ void GameScene::generateHostage() {
 
 void GameScene::generateEnemy() {
 	auto enemy = Sprite::create("enemy_0.png");
-	//敌人随机从屏幕左边或右边出来, 2/3概率从右边出现
-	auto ifLeft = (cocos2d::random(0, 2) == 0);
-	if (ifLeft) {
-		enemy->setPosition(Vec2(origin.x , origin.y + 50 + enemy->getContentSize().height / 2));
+	auto action = Animate::create(AnimationCache::getInstance()->getAnimation("enemy"));
+	enemy->runAction(RepeatForever::create(action));
+	//敌人随机屏幕左边或右边或上面出现
+	int dir = cocos2d::random(0, 2);
+	if (dir == 0) {
+		//从上面出现
+		auto x = cocos2d::random(50.0, (double)visibleSize.width - 50);
+		enemy->setPosition(Vec2(x, origin.y + visibleSize.height));
+		enemy->setFlippedX(cocos2d::random(0,1));
+		this->addChild(enemy, 1);
+		auto moveDown = MoveTo::create(1, Vec2(x, origin.y + 50 + enemy->getContentSize().height / 2));
+		enemy->runAction(Sequence::create(
+			moveDown,
+			CallFunc::create([=] {enemies.pushBack(enemy);}),
+			nullptr
+			));
+		return;
+	}
+	if (dir == 1){
+		enemy->setPosition(Vec2(origin.x, origin.y + 50 + enemy->getContentSize().height / 2));
 		enemy->setFlippedX(true);
 	}
 	else {
-		enemy->setPosition(Vec2(origin.x + visibleSize.width, 
+		enemy->setPosition(Vec2(origin.x + visibleSize.width,
 			origin.y + 50 + enemy->getContentSize().height / 2));
+		enemy->setFlippedX(false);
 	}
 	this->addChild(enemy, 1);
 	enemies.pushBack(enemy);
-	auto action2 = Animate::create(AnimationCache::getInstance()->getAnimation("enemy"));
-	enemy->runAction(RepeatForever::create(action2));
 }
 
 void GameScene::enemyAction(float f) {
 	//产生敌人
 	static int gtime = 0;
-	if (gtime == 0) {
+	if (gtime <= 0) {
 		generateEnemy();
 		gtime = 3;
 	}
 	gtime--;
 
 	for (auto enemy : enemies) {
+		if (enemy->getName() == "dead") continue;
 		//1/2概率攻击，1/2概率移动
 		bool attack= (cocos2d::random(0, 1) == 0);
 		//敌人攻击
 		if (attack) {
 			if (enemy->getPositionX() - player_head->getPositionX() < 60 && 
 				enemy->getPositionX() - player_head->getPositionX() > -60) {
-				unschedule(schedule_selector(GameScene::enemyAction));
 				auto enemy_stab = Animate::create(AnimationCache::getInstance()->getAnimation("enemy_stab"));
 				enemy->runAction(Sequence::create(
 					//敌人拔刀动画
@@ -407,12 +413,7 @@ void GameScene::enemyAction(float f) {
 					//敌人拔完刀，玩家还在攻击范围内则游戏结束
 						if (enemy->getPositionX() - player_head->getPositionX() < 60 &&
 							enemy->getPositionX() - player_head->getPositionX() > -60) {
-							player_head->stopAllActions();
-							player_leg->stopAllActions();
-							player_leg->setVisible(false);
-							_eventDispatcher->removeAllEventListeners();
-							auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("dead"));
-							player_head->runAction(Sequence::create(dead, CallFunc::create([=] {GameOver(); }), nullptr));
+							GameOver();
 						}
 					}),
 					nullptr
@@ -484,11 +485,8 @@ void GameScene::update(float f) {
 
 	//移除屏幕外一定距离的敌人
 	removeEnemy();
-	// 检测玩家是否中弹
+	// 检测玩家或敌人是否中弹
 	testGetShot();
-	
-	// 自动移除飞出屏幕外的子弹
-	
 }
 
 void GameScene::move(char dir) {
@@ -648,8 +646,10 @@ void GameScene::attack() {
 		auto animation = AnimationCache::getInstance()->getAnimation("pan");
 		auto animate = Animate::create(animation);
 		player_head->runAction(animate);
+		if (mostNearSprite->getName() != "dead") {
+			enemyDead(mostNearSprite);
+		}
 	}
-	// 碰撞检测并判断是攻击到的是人质还是敌人
 }
 
 void GameScene::jump() {
@@ -693,19 +693,46 @@ void GameScene::fireInTheHole() {
 }
 
 void GameScene::testGetShot() {
+	//判断玩家中弹
 	for (auto bullet : enemyBullets) {
 		if (player_head->getBoundingBox().containsPoint(bullet->getPosition())) {
-			player_head->stopAllActions();
-			player_leg->stopAllActions();
-			player_leg->setVisible(false);
-			_eventDispatcher->removeAllEventListeners();
-			auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("dead"));
-			player_head->runAction(Sequence::create(dead, CallFunc::create([=] {GameOver(); }), nullptr));
+			bullet->removeFromParentAndCleanup(true);
+			enemyBullets.erase(enemyBullets.getIndex(bullet));
+			GameOver();
+			return;
+		}
+	}
+	//判断敌人中弹
+	for (auto bullet : bullets) {
+		for (auto enemy : enemies) {
+			if (enemy->getBoundingBox().containsPoint(bullet->getPosition())) {
+				bullet->removeFromParentAndCleanup(true);
+				bullets.erase(bullets.getIndex(bullet));
+				//敌人中弹只播一次死亡动画，但可以继续挡子弹
+				if (enemy->getName() != "dead") {
+					enemyDead(enemy);
+				}
+				return;
+			}
 		}
 	}
 }
 
+void GameScene::enemyDead(Sprite* enemy) {
+	enemy->setName("dead");
+	enemy->stopAllActions();
+	auto enemyDead = Animate::create(AnimationCache::getInstance()->getAnimation("enemy_dead"));
+	enemy->runAction(Sequence::create(
+		enemyDead,
+		CallFunc::create([=] {
+		enemy->removeFromParentAndCleanup(true);
+		enemies.erase(enemies.getIndex(enemy));
+	}),
+		nullptr));
+}
+
 void GameScene::removeEnemy() {
+	//删除屏幕外的敌人
 	for (auto enemy : enemies) {
 		if (enemy->getPositionX() < origin.x - 100 ||
 			enemy->getPositionX() > origin.x + visibleSize.width + 100) {
@@ -785,10 +812,7 @@ void GameScene::onKeyReleased(EventKeyboard::KeyCode code, Event* event) {
 	}
 }
 
-void GameScene::GameOver() {
-	_eventDispatcher->removeAllEventListeners();
-	unschedule(schedule_selector(GameScene::update));
-
+void GameScene::showMenu() {
 	auto label1 = Label::createWithTTF("Game Over~", "fonts/STXINWEI.TTF", 60);
 	label1->setColor(Color3B(255, 0, 0));
 	label1->setPosition(visibleSize.width / 2, visibleSize.height / 2);
@@ -809,6 +833,17 @@ void GameScene::GameOver() {
 	this->addChild(exit, 3);
 }
 
+void GameScene::GameOver() {
+	_eventDispatcher->removeAllEventListeners();
+	unschedule(schedule_selector(GameScene::enemyAction));
+	unschedule(schedule_selector(GameScene::update));
+
+	player_head->stopAllActions();
+	player_leg->stopAllActions();
+	player_leg->setVisible(false);
+	auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("dead"));
+	player_head->runAction(Sequence::create(dead, CallFunc::create([=] {showMenu(); }), nullptr));
+}
 // 继续或重玩按钮响应函数
 void GameScene::replayCallback(Ref * pSender) {
 	Director::getInstance()->replaceScene(GameScene::createScene());

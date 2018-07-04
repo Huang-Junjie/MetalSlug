@@ -20,7 +20,8 @@ public:
 	void initSpriteFrame();		// 初始化序列帧动画
 	void preloadMusic();        // 预加载音乐
 	void GameOver();            // 游戏结束
-								
+	void showMenu();
+
 	void replayCallback(Ref* pSender);	// 重玩按钮响应函数
 	void exitCallback(Ref* pSender);	// 退出按钮响应函数
 
@@ -35,6 +36,7 @@ public:
 	void generateEnemy();		// 生成敌人
 	void testGetShot();			// 检测玩家是否中弹
 	void removeEnemy();			//移除屏幕外一定距离的敌人
+	void enemyDead(Sprite* enemy);  //敌人死亡
 
 	// implement the "static create()" method manually
 	CREATE_FUNC(GameScene);
