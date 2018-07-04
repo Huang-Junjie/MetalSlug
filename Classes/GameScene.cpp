@@ -162,6 +162,15 @@ void GameScene::initSpriteFrame() {
 	dead->setDelayPerUnit(0.1f);
 	AnimationCache::getInstance()->addAnimation(dead, "dead");
 
+	// 手榴弹爆炸
+	auto grenade_boom = Animation::create();
+	for (int i = 1; i < 7; i++) {
+		char szName[100] = { 0 };
+		sprintf(szName, "grenade_boom_%d.png", i);
+		grenade_boom->addSpriteFrameWithFile(szName);
+	}
+	grenade_boom->setDelayPerUnit(0.05f);
+	AnimationCache::getInstance()->addAnimation(grenade_boom, "grenade_boom");
 
 	/******************************************************************************
 	*                                 Oldman                                     *
@@ -360,21 +369,15 @@ void GameScene::generateEnemy() {
 	//敌人随机从屏幕左边或右边出来, 2/3概率从右边出现
 	auto ifLeft = (cocos2d::random(0, 2) == 0);
 	if (ifLeft) {
-		enemy->setPosition(Vec2(origin.x - 10 , origin.y + 50 + enemy->getContentSize().height / 2));
-		auto move = MoveBy::create(0.8f, Vec2(50, 0));
-		enemy->runAction(move);
+		enemy->setPosition(Vec2(origin.x , origin.y + 50 + enemy->getContentSize().height / 2));
 		enemy->setFlippedX(true);
 	}
 	else {
-		enemy->setPosition(Vec2(origin.x + visibleSize.width + 10, origin.y + 50 + enemy->getContentSize().height / 2));
-		auto move = MoveBy::create(0.8f, Vec2(-50, 0));
-		enemy->runAction(move);
+		enemy->setPosition(Vec2(origin.x + visibleSize.width, 
+			origin.y + 50 + enemy->getContentSize().height / 2));
 	}
-	auto r = AnimationCache::getInstance()->getAnimation("enemy_run");
-	auto enemy_run = Animate::create(r);
-	enemy->runAction(Sequence::create(enemy_run, CallFunc::create([=] {enemies.pushBack(enemy); }), nullptr));
 	this->addChild(enemy, 1);
-	
+	enemies.pushBack(enemy);
 	auto action2 = Animate::create(AnimationCache::getInstance()->getAnimation("enemy"));
 	enemy->runAction(RepeatForever::create(action2));
 }
@@ -404,7 +407,10 @@ void GameScene::enemyAction(float f) {
 					//敌人拔完刀，玩家还在攻击范围内则游戏结束
 						if (enemy->getPositionX() - player_head->getPositionX() < 60 &&
 							enemy->getPositionX() - player_head->getPositionX() > -60) {
+							player_head->stopAllActions();
+							player_leg->stopAllActions();
 							player_leg->setVisible(false);
+							_eventDispatcher->removeAllEventListeners();
 							auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("dead"));
 							player_head->runAction(Sequence::create(dead, CallFunc::create([=] {GameOver(); }), nullptr));
 						}
@@ -423,9 +429,12 @@ void GameScene::enemyAction(float f) {
 						int dir = bullet->isFlippedX() ? 1 : -1;
 						bullet->setPosition(enemy->getPosition());
 						addChild(bullet, 2);
-						enemyBullets.push_back(bullet);
+						enemyBullets.pushBack(bullet);
 						bullet->runAction(Sequence::create(MoveBy::create(2, Vec2(visibleSize.width * dir, 0)),
-							CallFunc::create([=] { bullet->removeFromParentAndCleanup(true); enemyBullets.remove(bullet); }),
+							CallFunc::create([=] { 
+								bullet->removeFromParentAndCleanup(true); 
+								enemyBullets.erase(enemyBullets.getIndex(bullet));
+							}),
 							nullptr));
 					}),
 					nullptr)
@@ -533,6 +542,10 @@ void GameScene::move(char dir) {
 				for (; it2 != hostages.end(); it2++) {
 					(*it2)->setPositionX((*it2)->getPositionX() - 5);
 				}
+				auto it3 = grenades.begin();
+				for (; it3 != grenades.end(); it3++) {
+					(*it3)->setPositionX((*it3)->getPositionX() - 5);
+				}
 			}
 		}
 		else {
@@ -546,12 +559,111 @@ void GameScene::move(char dir) {
 
 void GameScene::attack() {
 	// 判断是用平底锅还是用枪(平底锅打人质是松绑)
-	// 根据子弹类型发射不同的子弹
+	bool useGun = true;
+	auto playerPos = player_head->getPosition();
+	Sprite* mostNearSprite;
+	float mostNearDistance = 1000;
+	for each (auto enemy in enemies) {
+		auto distance = enemy->getPosition().getDistance(playerPos);
+		if (distance < mostNearDistance) {
+			mostNearSprite = enemy;
+			mostNearDistance = distance;
+		}
+	}
+	bool isHostage = false;
+	for each (auto hostage in hostages) {
+		auto distance = hostage->getPosition().getDistance(playerPos);
+		if (distance < mostNearDistance && distance < 50) {
+			mostNearSprite = hostage;
+			mostNearDistance = distance;
+			isHostage = true;
+		}
+	}
+	if (mostNearDistance < 50) useGun = false;
+	log("isHostage : %d", isHostage);
+	log("mostNearDistance: %f", mostNearDistance);
+
+	if (isHostage) {
+		// 解救人质
+		auto animation = AnimationCache::getInstance()->getAnimation("pan");
+		auto animate = Animate::create(animation);
+		player_head->runAction(animate);
+
+		mostNearSprite->stopAllActions();
+		auto moveBy_ = MoveBy::create(0.25f, Vec2(-30, 0));
+		auto a = AnimationCache::getInstance()->getAnimation("saved");
+		auto saved = Animate::create(a);
+		auto r_ = AnimationCache::getInstance()->getAnimation("oldman_run");
+		auto oldman_run = Animate::create(r_);
+		mostNearSprite->runAction(
+			Sequence::create(
+				CallFunc::create([=]() {
+					hostages.erase(hostages.getIndex(mostNearSprite));
+				}),
+				saved,
+				Repeat::create(
+					Sequence::create(
+						Spawn::createWithTwoActions(oldman_run, moveBy_),
+						Spawn::createWithTwoActions(oldman_run->reverse(), moveBy_),
+						NULL
+					),
+					10
+				),
+				CallFunc::create([=]() {
+					mostNearSprite->removeFromParentAndCleanup(true);
+				}),
+				NULL
+			)
+		);
+	}
+	else if (useGun) {
+		// 枪攻击
+		auto animation = AnimationCache::getInstance()->getAnimation("shoot");
+		auto animate = Animate::create(animation);
+		player_head->runAction(animate);
+		// 根据子弹类型发射不同的子弹
+
+		Sprite* bullet;
+		if (bulletLevel == 'M') {
+			bullet = Sprite::create("missile.png");
+		}
+		else {
+			bullet = Sprite::create("bullet.png");
+		}
+		float posOffset = shootDir == 'A' ? -1 : 1;
+		bullet->setPosition(Vec2(player_head->getPosition().x + posOffset * 5, player_head->getPosition().y));
+		this->addChild(bullet, 1);
+		bullets.pushBack(bullet);
+		bullet->runAction(Sequence::create(
+			MoveBy::create(5.0f, Vec2(posOffset * 1000, 0)),
+			CallFunc::create([=] {
+				bullet->removeFromParentAndCleanup(true);
+				bullets.erase(bullets.getIndex(bullet));
+			}),
+			nullptr
+			));
+	}
+	else {
+		// 平底锅攻击
+		auto animation = AnimationCache::getInstance()->getAnimation("pan");
+		auto animate = Animate::create(animation);
+		player_head->runAction(animate);
+	}
 	// 碰撞检测并判断是攻击到的是人质还是敌人
 }
 
 void GameScene::jump() {
 	// 跳的过程中可以左右移动和攻击
+	if (isJump) return;
+	isJump = true;
+	auto animation = AnimationCache::getInstance()->getAnimation("jump1");
+	auto jump1 = Animate::create(animation);
+	auto jumpBy = JumpBy::create(0.8f, Vec2(0, 0), 100, 1);
+	player_head->runAction(Sequence::create(jumpBy,
+		CallFunc::create([this]() {this->isJump = false; }),
+		nullptr));
+	auto spawn = Spawn::createWithTwoActions(jumpBy->clone(), jump1);
+	player_leg->runAction(spawn);
 }
 
 void GameScene::crouch() {
@@ -560,18 +672,37 @@ void GameScene::crouch() {
 
 void GameScene::fireInTheHole() {
 	// 扔雷
+	auto animation = AnimationCache::getInstance()->getAnimation("bomb");
+	auto animate = Animate::create(animation);
+	player_head->runAction(animate);
+
+	auto grenade = Sprite::create("grenade.png");
+	grenade->setPosition(player_head->getPosition());
+	grenades.pushBack(grenade);
+	this->addChild(grenade);
+	
+	int param_shoot = shootDir == 'A' ? -1 : 1;
+	grenade->runAction(Sequence::create(
+		JumpBy::create(1.0f, Vec2(param_shoot * 300, 0), 150, 1),
+		Animate::create(AnimationCache::getInstance()->getAnimation("grenade_boom")),
+		CallFunc::create([=]() {
+			grenades.erase(grenades.getIndex(grenade));
+			grenade->removeFromParentAndCleanup(true);
+		}),
+		nullptr));
 }
 
 void GameScene::testGetShot() {
 	for (auto bullet : enemyBullets) {
-		if (bullet->getPositionX() - player_head->getPositionX() < 50 &&
-			bullet->getPositionX() - player_head->getPositionX() > -50) {
+		if (player_head->getBoundingBox().containsPoint(bullet->getPosition())) {
+			player_head->stopAllActions();
+			player_leg->stopAllActions();
 			player_leg->setVisible(false);
+			_eventDispatcher->removeAllEventListeners();
 			auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("dead"));
 			player_head->runAction(Sequence::create(dead, CallFunc::create([=] {GameOver(); }), nullptr));
 		}
 	}
-	
 }
 
 void GameScene::removeEnemy() {
@@ -595,39 +726,41 @@ void GameScene::addKeyboardListener() {
 
 void GameScene::onKeyPressed(EventKeyboard::KeyCode code, Event* event) {
 	switch (code) {
-		case EventKeyboard::KeyCode::KEY_LEFT_ARROW:
-		case EventKeyboard::KeyCode::KEY_CAPITAL_A:
-		case EventKeyboard::KeyCode::KEY_A:
-			moveDir = 'A';
-			isMove = true;
-			break;
-		case EventKeyboard::KeyCode::KEY_RIGHT_ARROW:
-		case EventKeyboard::KeyCode::KEY_CAPITAL_D:
-		case EventKeyboard::KeyCode::KEY_D:
-			moveDir = 'D';
-			isMove = true;
-			break;
-		case EventKeyboard::KeyCode::KEY_CAPITAL_W:
-		case EventKeyboard::KeyCode::KEY_W:
-			shootDir = 'W';
-			break;
-		case EventKeyboard::KeyCode::KEY_CAPITAL_S:
-		case EventKeyboard::KeyCode::KEY_S:
-			// shootDir = 'S';	// 暂时先不做跳起来往下射击的操作
-			isCrouch = true;
-			break;
-		case EventKeyboard::KeyCode::KEY_CAPITAL_J:
-		case EventKeyboard::KeyCode::KEY_J:
-			attack();
-			break;
-		case EventKeyboard::KeyCode::KEY_CAPITAL_K:
-		case EventKeyboard::KeyCode::KEY_K:
-			jump();
-			break;
-		case EventKeyboard::KeyCode::KEY_CAPITAL_L:
-		case EventKeyboard::KeyCode::KEY_L:
-			fireInTheHole();
-			break;
+	case EventKeyboard::KeyCode::KEY_LEFT_ARROW:
+	case EventKeyboard::KeyCode::KEY_CAPITAL_A:
+	case EventKeyboard::KeyCode::KEY_A:
+		moveDir = 'A';
+		shootDir = 'A';
+		isMove = true;
+		break;
+	case EventKeyboard::KeyCode::KEY_RIGHT_ARROW:
+	case EventKeyboard::KeyCode::KEY_CAPITAL_D:
+	case EventKeyboard::KeyCode::KEY_D:
+		moveDir = 'D';
+		shootDir = 'D';
+		isMove = true;
+		break;
+	case EventKeyboard::KeyCode::KEY_CAPITAL_W:
+	case EventKeyboard::KeyCode::KEY_W:
+		shootDir = 'W';
+		break;
+	case EventKeyboard::KeyCode::KEY_CAPITAL_S:
+	case EventKeyboard::KeyCode::KEY_S:
+		// shootDir = 'S';	// 暂时先不做跳起来往下射击的操作
+		isCrouch = true;
+		break;
+	case EventKeyboard::KeyCode::KEY_CAPITAL_J:
+	case EventKeyboard::KeyCode::KEY_J:
+		attack();
+		break;
+	case EventKeyboard::KeyCode::KEY_CAPITAL_K:
+	case EventKeyboard::KeyCode::KEY_K:
+		jump();
+		break;
+	case EventKeyboard::KeyCode::KEY_CAPITAL_L:
+	case EventKeyboard::KeyCode::KEY_L:
+		fireInTheHole();
+		break;
 	}
 }
 

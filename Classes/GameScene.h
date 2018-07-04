@@ -56,8 +56,10 @@ private:
 	Vector<Sprite*> woodenBarrels;			// 木桶
 	Vector<Sprite*> ironDrums;				// 铁桶
 	Vector<Sprite*> bullets;				// 子弹
-	std::list<Sprite*> enemyBullets;			//敌人子弹
+	Vector<Sprite*> enemyBullets;			//敌人子弹
+	Vector<Sprite*> grenades;				//手榴弹
 
+	bool isJump;
 	bool isMove;
 	bool isAttack;
 	bool isCrouch;
