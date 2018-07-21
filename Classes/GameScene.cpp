@@ -1,7 +1,7 @@
+#pragma execution_character_set("utf-8")
 #include "GameScene.h"
 #include "cocos2d.h"
 #include "SimpleAudioEngine.h"
-#pragma execution_character_set("utf-8")
 
 USING_NS_CC;
 
@@ -24,10 +24,15 @@ bool GameScene::init() {
 	map2 = Sprite::create("background_2.jpg");
 	map3 = Sprite::create("background_3.jpg");
 
-	map0->setPosition(origin.x + map0->getContentSize().width / 2, origin.y + map0->getContentSize().height / 2);
-	map1->setPosition(map0->getPositionX() + map1->getContentSize().width, map0->getPositionY());
-	map2->setPosition(map1->getPositionX() + map2->getContentSize().width, map0->getPositionY());
-	map3->setPosition(map2->getPositionX() + map3->getContentSize().width, map0->getPositionY());
+	map0->setScale(2);
+	map1->setScale(2);
+	map2->setScale(2);
+	map3->setScale(2);
+
+	map0->setPosition(origin.x + map0->getContentSize().width, origin.y + map0->getContentSize().height);
+	map1->setPosition(map0->getPositionX() + map1->getContentSize().width * 2, map0->getPositionY());
+	map2->setPosition(map1->getPositionX() + map2->getContentSize().width * 2, map0->getPositionY());
+	map3->setPosition(map2->getPositionX() + map3->getContentSize().width * 2, map0->getPositionY());
 
 	this->addChild(map0, 0);
 	this->addChild(map1, 0);
@@ -38,29 +43,34 @@ bool GameScene::init() {
 	player_head = Sprite::create("player_head.png");
 	player_leg = Sprite::create("player_leg.png");
 
-	player_leg->setPosition(Vec2(origin.x + 100, origin.y + player_leg->getContentSize().height / 2 + 50));
-	player_head->setPosition(Vec2(player_leg->getPositionX() + 5,
-		player_leg->getPositionY() + player_head->getContentSize().height / 2));
+	player_head->setScale(2);
+	player_leg->setScale(2);
+
+	player_leg->setPosition(Vec2(origin.x + 200, origin.y + player_leg->getContentSize().height / 2 + 100));
+	player_head->setPosition(Vec2(player_leg->getPositionX() + 10,
+		player_leg->getPositionY() + player_head->getContentSize().height));
 
 	player_head->setFlipX(true);
 	player_leg->setFlipX(true);
 
-	this->addChild(player_leg, 2);
-	this->addChild(player_head, 2);	
+	this->addChild(player_leg, 3);
+	this->addChild(player_head, 3);	
 
 	// 初始化变量
 	lastCid = 'D';
+	isJump = false;
 
 	initSpriteFrame();
 	preloadMusic();
 
 	generateObstacle();
 	generateHostage();
+	generateEnemy();
 
 	addKeyboardListener();
 
 	schedule(schedule_selector(GameScene::update), 0.05f, kRepeatForever, 0);
-	
+
 	schedule(schedule_selector(GameScene::enemyAction), 1.6f, kRepeatForever, 0);
 
 	return true;
@@ -162,15 +172,6 @@ void GameScene::initSpriteFrame() {
 	dead->setDelayPerUnit(0.1f);
 	AnimationCache::getInstance()->addAnimation(dead, "dead");
 
-	// 手榴弹爆炸
-	auto grenade_boom = Animation::create();
-	for (int i = 1; i < 7; i++) {
-		char szName[100] = { 0 };
-		sprintf(szName, "grenade_boom_%d.png", i);
-		grenade_boom->addSpriteFrameWithFile(szName);
-	}
-	grenade_boom->setDelayPerUnit(0.05f);
-	AnimationCache::getInstance()->addAnimation(grenade_boom, "grenade_boom");
 
 	/******************************************************************************
 	*                                 Oldman                                     *
@@ -298,7 +299,7 @@ void GameScene::initSpriteFrame() {
 	auto moveBy = MoveBy::create(0.8f, Vec2(-10, 0));
 	auto r = AnimationCache::getInstance()->getAnimation("enemy_run");
 	auto enemy_run = Animate::create(r);
-	enemy->runAction(Spawn::createWithTwoActions(moveBy, enemy_run));
+	enmey->runAction(Spawn::createWithTwoActions(moveBy, enemy_run));
 	*******************************************************************************/
 
 	// 敌人射击
@@ -309,7 +310,7 @@ void GameScene::initSpriteFrame() {
 		sprintf(szName, "enemy_shoot_%d.png", i);
 		enemy_shoot->addSpriteFrameWithFile(szName);
 	}
-	enemy_shoot->setDelayPerUnit(0.2f);
+	enemy_shoot->setDelayPerUnit(0.15f);
 	AnimationCache::getInstance()->addAnimation(enemy_shoot, "enemy_shoot");
 
 	// 敌人出刀
@@ -320,7 +321,7 @@ void GameScene::initSpriteFrame() {
 		sprintf(szName, "enemy_stab_%d.png", i);
 		enemy_stab->addSpriteFrameWithFile(szName);
 	}
-	enemy_stab->setDelayPerUnit(0.2f);
+	enemy_stab->setDelayPerUnit(0.15f);
 	AnimationCache::getInstance()->addAnimation(enemy_stab, "enemy_stab");
 
 	// 敌人死亡
@@ -333,6 +334,16 @@ void GameScene::initSpriteFrame() {
 	}
 	enemy_dead->setDelayPerUnit(0.1f);
 	AnimationCache::getInstance()->addAnimation(enemy_dead, "enemy_dead");
+
+	// 手榴弹爆炸
+	auto grenade_boom = Animation::create();
+	for (int i = 1; i < 7; i++) {
+		char szName[100] = { 0 };
+		sprintf(szName, "grenade_boom_%d.png", i);
+		grenade_boom->addSpriteFrameWithFile(szName);
+	}
+	grenade_boom->setDelayPerUnit(0.05f);
+	AnimationCache::getInstance()->addAnimation(grenade_boom, "grenade_boom");
 }
 
 void GameScene::preloadMusic() {
@@ -346,8 +357,9 @@ void GameScene::generateObstacle() {
 void GameScene::generateHostage() {
 	for (int i = 0; i < 10; i++) {
 		auto oldman = Sprite::create("oldman_0.png");
+		oldman->setScale(2);
 		auto x = cocos2d::random(50.0, (double)(4 * map0->getContentSize().width - 50));
-		oldman->setPosition(Vec2(x, origin.y + 50 + oldman->getContentSize().height / 2));
+		oldman->setPosition(Vec2(x, origin.y + 100 + oldman->getContentSize().height / 2));
 		this->addChild(oldman, 1);
 		hostages.pushBack(oldman);
 		auto action = Animate::create(AnimationCache::getInstance()->getAnimation("oldman"));
@@ -357,6 +369,7 @@ void GameScene::generateHostage() {
 
 void GameScene::generateEnemy() {
 	auto enemy = Sprite::create("enemy_0.png");
+	enemy->setScale(2);
 	auto action = Animate::create(AnimationCache::getInstance()->getAnimation("enemy"));
 	enemy->runAction(RepeatForever::create(action));
 	//敌人随机屏幕左边或右边或上面出现
@@ -365,27 +378,261 @@ void GameScene::generateEnemy() {
 		//从上面出现
 		auto x = cocos2d::random(50.0, (double)visibleSize.width - 50);
 		enemy->setPosition(Vec2(x, origin.y + visibleSize.height));
-		enemy->setFlippedX(cocos2d::random(0,1));
+		enemy->setFlippedX(cocos2d::random(0, 1));
 		this->addChild(enemy, 1);
-		auto moveDown = MoveTo::create(1, Vec2(x, origin.y + 50 + enemy->getContentSize().height / 2));
+		enemies.pushBack(enemy);
+		enemy->setName("downing");
+		auto moveDown = MoveTo::create(1, Vec2(x, origin.y + 100 + enemy->getContentSize().height / 2));
 		enemy->runAction(Sequence::create(
 			moveDown,
-			CallFunc::create([=] {enemies.pushBack(enemy);}),
+			CallFunc::create([=] {enemy->setName("downed"); }),
 			nullptr
-			));
+		));
 		return;
 	}
-	if (dir == 1){
-		enemy->setPosition(Vec2(origin.x, origin.y + 50 + enemy->getContentSize().height / 2));
+	if (dir == 1) {
+		enemy->setPosition(Vec2(origin.x, origin.y + 100 + enemy->getContentSize().height / 2));
 		enemy->setFlippedX(true);
 	}
 	else {
-		enemy->setPosition(Vec2(origin.x + visibleSize.width,
-			origin.y + 50 + enemy->getContentSize().height / 2));
+		enemy->setPosition(Vec2(origin.x + visibleSize.width, origin.y + 100 + enemy->getContentSize().height / 2));
 		enemy->setFlippedX(false);
 	}
 	this->addChild(enemy, 1);
 	enemies.pushBack(enemy);
+}
+
+void GameScene::update(float f) {
+
+	if (isMove) move(moveDir);
+
+	if (isCrouch) crouch();
+
+	//移除屏幕外一定距离的敌人
+	removeEnemy();
+	// 检测玩家是否中弹
+	testGetShot();
+}
+
+void GameScene::move(char dir) {
+	auto r = AnimationCache::getInstance()->getAnimation("run");
+	auto player_run = Animate::create(r);
+	player_run->setTag(1);
+	if (player_leg->getNumberOfRunningActionsByTag(1) == 0) {
+		player_leg->runAction(player_run);
+	}
+
+	if (dir == 'A') {
+		if (lastCid != 'A') {
+			player_head->setFlipX(false);
+			player_leg->setFlipX(false);
+			player_leg->setPositionX(player_leg->getPositionX() + 20);
+			shootDir = 'A';
+		}
+		lastCid = 'A';
+		
+		if (player_head->getPositionX() - player_head->getContentSize().width >= 0) {
+			auto moveBy1 = MoveBy::create(0.05f, Vec2(-10, 0));		
+			auto moveBy2 = MoveBy::create(0.05f, Vec2(-10, 0));
+			player_head->runAction(moveBy1);					
+			player_leg->runAction(moveBy2);	
+		}
+	}
+	else {
+		if (lastCid != 'D') {
+			player_head->setFlipX(true);
+			player_leg->setFlipX(true);
+			player_leg->setPositionX(player_leg->getPositionX() - 20);
+			shootDir = 'D';
+		}
+		lastCid = 'D';
+
+		if (player_head->getPositionX() * 2 >= visibleSize.width / 3) {
+			if (map3->getPositionX() + map3->getContentSize().width <= visibleSize.width) {
+				if (player_head->getPositionX() + player_head->getContentSize().width <= visibleSize.width) {
+					auto moveBy1 = MoveBy::create(0.05f, Vec2(10, 0));
+					auto moveBy2 = MoveBy::create(0.05f, Vec2(10, 0));
+					player_head->runAction(moveBy1);
+					player_leg->runAction(moveBy2);
+				}			
+			}
+			else {
+				map0->setPositionX(map0->getPositionX() - 10);
+				map1->setPositionX(map1->getPositionX() - 10);
+				map2->setPositionX(map2->getPositionX() - 10);
+				map3->setPositionX(map3->getPositionX() - 10);
+				auto it1 = enemies.begin();
+				for (; it1 != enemies.end(); it1++) {
+					(*it1)->setPositionX((*it1)->getPositionX() - 10);
+				}
+				auto it2 = hostages.begin();
+				for (; it2 != hostages.end(); it2++) {
+					(*it2)->setPositionX((*it2)->getPositionX() - 10);
+				}
+				auto it3 = grenades.begin();
+				for (; it3 != grenades.end(); it3++) {
+					(*it3)->setPositionX((*it3)->getPositionX() - 10);
+				}
+			}
+		}
+		else {
+			auto moveBy1 = MoveBy::create(0.05f, Vec2(10, 0));
+			auto moveBy2 = MoveBy::create(0.05f, Vec2(10, 0));
+			player_head->runAction(moveBy1);
+			player_leg->runAction(moveBy2);
+		}
+	}
+}
+
+void GameScene::attack() {
+	// 判断是用平底锅还是用枪(平底锅打人质是松绑)
+	bool useGun = true;
+	auto playerPos = player_head->getPosition();
+	Sprite* mostNearSprite;
+	float mostNearDistance = 2000;
+	for each (auto enemy in enemies) {
+		auto distance = enemy->getPosition().getDistance(playerPos);
+		if (distance < mostNearDistance) {
+			mostNearSprite = enemy;
+			mostNearDistance = distance;
+		}
+	}
+	bool isHostage = false;
+	for each (auto hostage in hostages) {
+		auto distance = hostage->getPosition().getDistance(playerPos);
+		if (distance < mostNearDistance && distance < 100) {
+			mostNearSprite = hostage;
+			mostNearDistance = distance;
+			isHostage = true;
+		}
+	}
+	if (mostNearDistance < 100) useGun = false;
+
+	if (isHostage) {
+		// 解救人质
+		auto animation = AnimationCache::getInstance()->getAnimation("pan");
+		auto animate = Animate::create(animation);
+		player_head->runAction(animate);
+
+		mostNearSprite->stopAllActions();
+		auto moveBy_ = MoveBy::create(0.25f, Vec2(-60, 0));
+		auto a = AnimationCache::getInstance()->getAnimation("saved");
+		auto saved = Animate::create(a);
+		auto r_ = AnimationCache::getInstance()->getAnimation("oldman_run");
+		auto oldman_run = Animate::create(r_);
+		mostNearSprite->runAction(
+			Sequence::create(
+				CallFunc::create([=]() {
+					hostages.erase(hostages.getIndex(mostNearSprite));
+				}),
+				saved,
+				Repeat::create(
+					Sequence::create(
+						Spawn::createWithTwoActions(oldman_run, moveBy_),
+						Spawn::createWithTwoActions(oldman_run->reverse(), moveBy_),
+						NULL
+					),
+					10
+				),
+			CallFunc::create([=]() {
+				mostNearSprite->removeFromParentAndCleanup(true);
+			}),
+			NULL
+			)
+		);
+	}
+	else if (useGun) {
+		// 枪攻击
+		auto animation = AnimationCache::getInstance()->getAnimation("shoot");
+		auto animate = Animate::create(animation);
+		player_head->runAction(animate);
+		// 根据子弹类型发射不同的子弹
+
+		Sprite* bullet;
+		if (bulletLevel == 'M') {
+			bullet = Sprite::create("missile.png");
+		}
+		else {
+			bullet = Sprite::create("bullet.png");
+		}
+		bullet->setScale(2);
+		float posOffset = shootDir == 'A' ? -1 : 1;
+		bullet->setPosition(Vec2(player_head->getPosition().x + posOffset * 10, player_head->getPosition().y));
+		this->addChild(bullet, 1);
+		bullets.pushBack(bullet);
+		bullet->runAction(Sequence::create(
+			MoveBy::create(5.0f, Vec2(posOffset * 2000, 0)),
+			CallFunc::create([=] {
+				bullet->removeFromParentAndCleanup(true);
+				bullets.erase(bullets.getIndex(bullet));
+			}),
+			nullptr
+			)
+		);
+	}
+	else {
+		// 平底锅攻击
+		auto animation = AnimationCache::getInstance()->getAnimation("pan");
+		auto animate = Animate::create(animation);
+		player_head->runAction(animate);
+
+		mostNearSprite->stopAllActions();
+		enemies.erase(enemies.getIndex(mostNearSprite));
+		auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("enemy_dead"));
+		mostNearSprite->runAction(
+			Sequence::create(
+				dead,
+				CallFunc::create([=] {
+					mostNearSprite->removeFromParentAndCleanup(true);
+				}),
+				nullptr
+			)
+		);
+	}
+	// 碰撞检测并判断是攻击到的是人质还是敌人
+}
+
+void GameScene::jump() {
+	// 跳的过程中可以左右移动和攻击
+	if (isJump) return;
+	isJump = true;
+	auto animation = AnimationCache::getInstance()->getAnimation("jump1");
+	auto jump1 = Animate::create(animation);
+	auto jumpBy = JumpBy::create(0.8f, Vec2(0, 0), 200, 1);
+	player_head->runAction(Sequence::create(jumpBy,
+		CallFunc::create([this]() {this->isJump = false; }),
+		nullptr));
+	auto spawn = Spawn::createWithTwoActions(jumpBy->clone(), jump1);
+	player_leg->runAction(spawn);
+}
+
+void GameScene::crouch() {
+	// 蹲着的时候可以左右移动和攻击
+}
+
+void GameScene::fireInTheHole() {
+	// 扔雷
+	auto animation = AnimationCache::getInstance()->getAnimation("bomb");
+	auto animate = Animate::create(animation);
+	player_head->runAction(animate);
+
+	auto grenade = Sprite::create("grenade.png");
+	grenade->setScale(2);
+	grenade->setPosition(player_head->getPosition());
+	grenades.pushBack(grenade);
+	this->addChild(grenade);
+
+	int param_shoot = shootDir == 'A' ? -1 : 1;
+	int y = isJump ? -(player_leg->getPositionY() - 100) : 0;
+	grenade->runAction(Sequence::create(
+		JumpBy::create(1.0f, Vec2(param_shoot * 500, y), 300, 1),
+		Animate::create(AnimationCache::getInstance()->getAnimation("grenade_boom")),
+		CallFunc::create([=]() {
+			grenades.erase(grenades.getIndex(grenade));
+			grenade->removeFromParentAndCleanup(true);
+		}),
+		nullptr
+	));
 }
 
 void GameScene::enemyAction(float f) {
@@ -398,12 +645,12 @@ void GameScene::enemyAction(float f) {
 	gtime--;
 
 	for (auto enemy : enemies) {
-		if (enemy->getName() == "dead") continue;
+		if (enemy->getName() == "dead" || enemy->getName() == "downing") continue;
 		//1/2概率攻击，1/2概率移动
-		bool attack= (cocos2d::random(0, 1) == 0);
+		bool attack = (cocos2d::random(0, 1) == 0);
 		//敌人攻击
 		if (attack) {
-			if (enemy->getPositionX() - player_head->getPositionX() < 60 && 
+			if (enemy->getPositionX() - player_head->getPositionX() < 60 &&
 				enemy->getPositionX() - player_head->getPositionX() > -60) {
 				auto enemy_stab = Animate::create(AnimationCache::getInstance()->getAnimation("enemy_stab"));
 				enemy->runAction(Sequence::create(
@@ -411,35 +658,36 @@ void GameScene::enemyAction(float f) {
 					enemy_stab,
 					CallFunc::create([=] {
 					//敌人拔完刀，玩家还在攻击范围内则游戏结束
-						if (enemy->getPositionX() - player_head->getPositionX() < 60 &&
-							enemy->getPositionX() - player_head->getPositionX() > -60) {
-							GameOver();
-						}
-					}),
+					if (enemy->getPositionX() - player_head->getPositionX() < 60 &&
+						enemy->getPositionX() - player_head->getPositionX() > -60) {
+						GameOver();
+					}
+				}),
 					nullptr
-				));
-				
+					));
+
 			}
 			else {
 				auto enemy_shoot = Animate::create(AnimationCache::getInstance()->getAnimation("enemy_shoot"));
 				enemy->runAction(Sequence::create(
 					enemy_shoot,
 					CallFunc::create([=] {
-						auto bullet = Sprite::create("bullet.png");
-						bullet->setFlippedX(enemy->isFlippedX());
-						int dir = bullet->isFlippedX() ? 1 : -1;
-						bullet->setPosition(enemy->getPosition());
-						addChild(bullet, 2);
-						enemyBullets.pushBack(bullet);
-						bullet->runAction(Sequence::create(MoveBy::create(2, Vec2(visibleSize.width * dir, 0)),
-							CallFunc::create([=] { 
-								bullet->removeFromParentAndCleanup(true); 
-								enemyBullets.erase(enemyBullets.getIndex(bullet));
-							}),
-							nullptr));
+					auto bullet = Sprite::create("bullet.png");
+					bullet->setFlippedX(enemy->isFlippedX());
+					bullet->setScale(1.5);
+					int dir = bullet->isFlippedX() ? 1 : -1;
+					bullet->setPosition(enemy->getPosition());
+					addChild(bullet, 2);
+					enemyBullets.pushBack(bullet);
+					bullet->runAction(Sequence::create(MoveBy::create(2, Vec2(visibleSize.width * dir, 0)),
+						CallFunc::create([=] {
+						bullet->removeFromParentAndCleanup(true);
+						enemyBullets.erase(enemyBullets.getIndex(bullet));
 					}),
+						nullptr));
+				}),
 					nullptr)
-					);	
+				);
 			}
 			continue;
 		}
@@ -472,224 +720,9 @@ void GameScene::enemyAction(float f) {
 		auto r = AnimationCache::getInstance()->getAnimation("enemy_run");
 		auto enemy_run = Animate::create(r);
 		enemy->runAction(Sequence::create(enemy_run, enemy_run->clone(), nullptr));
-		
+
 	}
 
-}
-
-void GameScene::update(float f) {
-
-	if (isMove) move(moveDir);
-
-	if (isCrouch) crouch();
-
-	//移除屏幕外一定距离的敌人
-	removeEnemy();
-	// 检测玩家或敌人是否中弹
-	testGetShot();
-}
-
-void GameScene::move(char dir) {
-	auto r = AnimationCache::getInstance()->getAnimation("run");
-	auto player_run = Animate::create(r);
-	player_run->setTag(1);
-	if (player_leg->getNumberOfRunningActionsByTag(1) == 0) {
-		player_leg->runAction(player_run);
-	}
-
-	if (dir == 'A') {
-		if (lastCid != 'A') {
-			player_head->setFlipX(false);
-			player_leg->setFlipX(false);
-			player_leg->setPositionX(player_leg->getPositionX() + 10);
-		}
-		lastCid = 'A';
-		
-		if (player_head->getPositionX() - player_head->getContentSize().width / 2 >= 0) {
-			auto moveBy1 = MoveBy::create(0.05f, Vec2(-5, 0));		
-			auto moveBy2 = MoveBy::create(0.05f, Vec2(-5, 0));
-			player_head->runAction(moveBy1);					
-			player_leg->runAction(moveBy2);	
-		}
-	}
-	else {
-		if (lastCid != 'D') {
-			player_head->setFlipX(true);
-			player_leg->setFlipX(true);
-			player_leg->setPositionX(player_leg->getPositionX() - 10);
-		}
-		lastCid = 'D';
-
-		if (player_head->getPositionX() >= visibleSize.width / 3) {
-			if (map3->getPositionX() + map3->getContentSize().width / 2 <= visibleSize.width) {
-				auto moveBy1 = MoveBy::create(0.05f, Vec2(5, 0));
-				auto moveBy2 = MoveBy::create(0.05f, Vec2(5, 0));
-				player_head->runAction(moveBy1);
-				player_leg->runAction(moveBy2);
-			}
-			else {
-				map0->setPositionX(map0->getPositionX() - 5);
-				map1->setPositionX(map1->getPositionX() - 5);
-				map2->setPositionX(map2->getPositionX() - 5);
-				map3->setPositionX(map3->getPositionX() - 5);
-				auto it1 = enemies.begin();
-				for (; it1 != enemies.end(); it1++) {
-					(*it1)->setPositionX((*it1)->getPositionX() - 5);
-				}
-				auto it2 = hostages.begin();
-				for (; it2 != hostages.end(); it2++) {
-					(*it2)->setPositionX((*it2)->getPositionX() - 5);
-				}
-				auto it3 = grenades.begin();
-				for (; it3 != grenades.end(); it3++) {
-					(*it3)->setPositionX((*it3)->getPositionX() - 5);
-				}
-			}
-		}
-		else {
-			auto moveBy1 = MoveBy::create(0.05f, Vec2(5, 0));
-			auto moveBy2 = MoveBy::create(0.05f, Vec2(5, 0));
-			player_head->runAction(moveBy1);
-			player_leg->runAction(moveBy2);
-		}
-	}
-}
-
-void GameScene::attack() {
-	// 判断是用平底锅还是用枪(平底锅打人质是松绑)
-	bool useGun = true;
-	auto playerPos = player_head->getPosition();
-	Sprite* mostNearSprite;
-	float mostNearDistance = 1000;
-	for each (auto enemy in enemies) {
-		auto distance = enemy->getPosition().getDistance(playerPos);
-		if (distance < mostNearDistance) {
-			mostNearSprite = enemy;
-			mostNearDistance = distance;
-		}
-	}
-	bool isHostage = false;
-	for each (auto hostage in hostages) {
-		auto distance = hostage->getPosition().getDistance(playerPos);
-		if (distance < mostNearDistance && distance < 50) {
-			mostNearSprite = hostage;
-			mostNearDistance = distance;
-			isHostage = true;
-		}
-	}
-	if (mostNearDistance < 50) useGun = false;
-	log("isHostage : %d", isHostage);
-	log("mostNearDistance: %f", mostNearDistance);
-
-	if (isHostage) {
-		// 解救人质
-		auto animation = AnimationCache::getInstance()->getAnimation("pan");
-		auto animate = Animate::create(animation);
-		player_head->runAction(animate);
-
-		mostNearSprite->stopAllActions();
-		auto moveBy_ = MoveBy::create(0.25f, Vec2(-30, 0));
-		auto a = AnimationCache::getInstance()->getAnimation("saved");
-		auto saved = Animate::create(a);
-		auto r_ = AnimationCache::getInstance()->getAnimation("oldman_run");
-		auto oldman_run = Animate::create(r_);
-		mostNearSprite->runAction(
-			Sequence::create(
-				CallFunc::create([=]() {
-					hostages.erase(hostages.getIndex(mostNearSprite));
-				}),
-				saved,
-				Repeat::create(
-					Sequence::create(
-						Spawn::createWithTwoActions(oldman_run, moveBy_),
-						Spawn::createWithTwoActions(oldman_run->reverse(), moveBy_),
-						NULL
-					),
-					10
-				),
-				CallFunc::create([=]() {
-					mostNearSprite->removeFromParentAndCleanup(true);
-				}),
-				NULL
-			)
-		);
-	}
-	else if (useGun) {
-		// 枪攻击
-		auto animation = AnimationCache::getInstance()->getAnimation("shoot");
-		auto animate = Animate::create(animation);
-		player_head->runAction(animate);
-		// 根据子弹类型发射不同的子弹
-
-		Sprite* bullet;
-		if (bulletLevel == 'M') {
-			bullet = Sprite::create("missile.png");
-		}
-		else {
-			bullet = Sprite::create("bullet.png");
-		}
-		float posOffset = shootDir == 'A' ? -1 : 1;
-		bullet->setPosition(Vec2(player_head->getPosition().x + posOffset * 5, player_head->getPosition().y));
-		this->addChild(bullet, 1);
-		bullets.pushBack(bullet);
-		bullet->runAction(Sequence::create(
-			MoveBy::create(5.0f, Vec2(posOffset * 1000, 0)),
-			CallFunc::create([=] {
-				bullet->removeFromParentAndCleanup(true);
-				bullets.erase(bullets.getIndex(bullet));
-			}),
-			nullptr
-			));
-	}
-	else {
-		// 平底锅攻击
-		auto animation = AnimationCache::getInstance()->getAnimation("pan");
-		auto animate = Animate::create(animation);
-		player_head->runAction(animate);
-		if (mostNearSprite->getName() != "dead") {
-			enemyDead(mostNearSprite);
-		}
-	}
-}
-
-void GameScene::jump() {
-	// 跳的过程中可以左右移动和攻击
-	if (isJump) return;
-	isJump = true;
-	auto animation = AnimationCache::getInstance()->getAnimation("jump1");
-	auto jump1 = Animate::create(animation);
-	auto jumpBy = JumpBy::create(0.8f, Vec2(0, 0), 100, 1);
-	player_head->runAction(Sequence::create(jumpBy,
-		CallFunc::create([this]() {this->isJump = false; }),
-		nullptr));
-	auto spawn = Spawn::createWithTwoActions(jumpBy->clone(), jump1);
-	player_leg->runAction(spawn);
-}
-
-void GameScene::crouch() {
-	// 蹲着的时候可以左右移动和攻击
-}
-
-void GameScene::fireInTheHole() {
-	// 扔雷
-	auto animation = AnimationCache::getInstance()->getAnimation("bomb");
-	auto animate = Animate::create(animation);
-	player_head->runAction(animate);
-
-	auto grenade = Sprite::create("grenade.png");
-	grenade->setPosition(player_head->getPosition());
-	grenades.pushBack(grenade);
-	this->addChild(grenade);
-	
-	int param_shoot = shootDir == 'A' ? -1 : 1;
-	grenade->runAction(Sequence::create(
-		JumpBy::create(1.0f, Vec2(param_shoot * 300, 0), 150, 1),
-		Animate::create(AnimationCache::getInstance()->getAnimation("grenade_boom")),
-		CallFunc::create([=]() {
-			grenades.erase(grenades.getIndex(grenade));
-			grenade->removeFromParentAndCleanup(true);
-		}),
-		nullptr));
 }
 
 void GameScene::testGetShot() {
@@ -753,41 +786,39 @@ void GameScene::addKeyboardListener() {
 
 void GameScene::onKeyPressed(EventKeyboard::KeyCode code, Event* event) {
 	switch (code) {
-	case EventKeyboard::KeyCode::KEY_LEFT_ARROW:
-	case EventKeyboard::KeyCode::KEY_CAPITAL_A:
-	case EventKeyboard::KeyCode::KEY_A:
-		moveDir = 'A';
-		shootDir = 'A';
-		isMove = true;
-		break;
-	case EventKeyboard::KeyCode::KEY_RIGHT_ARROW:
-	case EventKeyboard::KeyCode::KEY_CAPITAL_D:
-	case EventKeyboard::KeyCode::KEY_D:
-		moveDir = 'D';
-		shootDir = 'D';
-		isMove = true;
-		break;
-	case EventKeyboard::KeyCode::KEY_CAPITAL_W:
-	case EventKeyboard::KeyCode::KEY_W:
-		shootDir = 'W';
-		break;
-	case EventKeyboard::KeyCode::KEY_CAPITAL_S:
-	case EventKeyboard::KeyCode::KEY_S:
-		// shootDir = 'S';	// 暂时先不做跳起来往下射击的操作
-		isCrouch = true;
-		break;
-	case EventKeyboard::KeyCode::KEY_CAPITAL_J:
-	case EventKeyboard::KeyCode::KEY_J:
-		attack();
-		break;
-	case EventKeyboard::KeyCode::KEY_CAPITAL_K:
-	case EventKeyboard::KeyCode::KEY_K:
-		jump();
-		break;
-	case EventKeyboard::KeyCode::KEY_CAPITAL_L:
-	case EventKeyboard::KeyCode::KEY_L:
-		fireInTheHole();
-		break;
+		case EventKeyboard::KeyCode::KEY_LEFT_ARROW:
+		case EventKeyboard::KeyCode::KEY_CAPITAL_A:
+		case EventKeyboard::KeyCode::KEY_A:
+			moveDir = 'A';
+			isMove = true;
+			break;
+		case EventKeyboard::KeyCode::KEY_RIGHT_ARROW:
+		case EventKeyboard::KeyCode::KEY_CAPITAL_D:
+		case EventKeyboard::KeyCode::KEY_D:
+			moveDir = 'D';
+			isMove = true;
+			break;
+		case EventKeyboard::KeyCode::KEY_CAPITAL_W:
+		case EventKeyboard::KeyCode::KEY_W:
+			shootDir = 'W';
+			break;
+		case EventKeyboard::KeyCode::KEY_CAPITAL_S:
+		case EventKeyboard::KeyCode::KEY_S:
+			// shootDir = 'S';	// 暂时先不做跳起来往下射击的操作
+			isCrouch = true;
+			break;
+		case EventKeyboard::KeyCode::KEY_CAPITAL_J:
+		case EventKeyboard::KeyCode::KEY_J:
+			attack();
+			break;
+		case EventKeyboard::KeyCode::KEY_CAPITAL_K:
+		case EventKeyboard::KeyCode::KEY_K:
+			jump();
+			break;
+		case EventKeyboard::KeyCode::KEY_CAPITAL_L:
+		case EventKeyboard::KeyCode::KEY_L:
+			fireInTheHole();
+			break;
 	}
 }
 
@@ -813,23 +844,23 @@ void GameScene::onKeyReleased(EventKeyboard::KeyCode code, Event* event) {
 }
 
 void GameScene::showMenu() {
-	auto label1 = Label::createWithTTF("Game Over~", "fonts/STXINWEI.TTF", 60);
+	auto label1 = Label::createWithTTF("Game Over~", "fonts/STXINWEI.TTF", 120);
 	label1->setColor(Color3B(255, 0, 0));
 	label1->setPosition(visibleSize.width / 2, visibleSize.height / 2);
 	this->addChild(label1, 3);
 
-	auto label2 = Label::createWithTTF("重玩", "fonts/STXINWEI.TTF", 40);
+	auto label2 = Label::createWithTTF("重玩", "fonts/STXINWEI.TTF", 80);
 	label2->setColor(Color3B(255, 0, 0));
 	auto replayBtn = MenuItemLabel::create(label2, CC_CALLBACK_1(GameScene::replayCallback, this));
 	Menu* replay = Menu::create(replayBtn, NULL);
-	replay->setPosition(visibleSize.width / 2 - 80, visibleSize.height / 2 - 100);
+	replay->setPosition(visibleSize.width / 2 - 160, visibleSize.height / 2 - 200);
 	this->addChild(replay, 3);
 
-	auto label3 = Label::createWithTTF("退出", "fonts/STXINWEI.TTF", 40);
+	auto label3 = Label::createWithTTF("退出", "fonts/STXINWEI.TTF", 80);
 	label3->setColor(Color3B(255, 0, 0));
 	auto exitBtn = MenuItemLabel::create(label3, CC_CALLBACK_1(GameScene::exitCallback, this));
 	Menu* exit = Menu::create(exitBtn, NULL);
-	exit->setPosition(visibleSize.width / 2 + 90, visibleSize.height / 2 - 100);
+	exit->setPosition(visibleSize.width / 2 + 180, visibleSize.height / 2 - 200);
 	this->addChild(exit, 3);
 }
 
@@ -841,6 +872,7 @@ void GameScene::GameOver() {
 	player_head->stopAllActions();
 	player_leg->stopAllActions();
 	player_leg->setVisible(false);
+	player_head->setPosition(player_head->getPosition() - Vec2(0,50));
 	auto dead = Animate::create(AnimationCache::getInstance()->getAnimation("dead"));
 	player_head->runAction(Sequence::create(dead, CallFunc::create([=] {showMenu(); }), nullptr));
 }

@@ -1,5 +1,5 @@
-#ifndef __THUNDER_H__
-#define __THUNDER_H__
+#ifndef __GAME_SCENE_H__
+#define __GAME_SCENE_H__
 
 #include "cocos2d.h"
 USING_NS_CC;
@@ -11,7 +11,7 @@ public:
 	virtual bool init();
 
 	void update(float f);
-	void enemyAction(float f);
+
 	void addKeyboardListener();
 
 	void onKeyPressed(EventKeyboard::KeyCode code, Event* event);
@@ -34,8 +34,9 @@ public:
 	void generateObstacle();	// 生成障碍物
 	void generateHostage();		// 生成人质
 	void generateEnemy();		// 生成敌人
-	void testGetShot();			// 检测玩家是否中弹
-	void removeEnemy();			//移除屏幕外一定距离的敌人
+	void testGetShot();			// 检测玩家和敌人是否中弹
+	void removeEnemy();			// 移除屏幕外一定距离的敌人
+	void enemyAction(float f);	// 敌人的动作
 	void enemyDead(Sprite* enemy);  //敌人死亡
 
 	// implement the "static create()" method manually
@@ -57,18 +58,18 @@ private:
 	Vector<Sprite*>	sandBags;				// 沙包
 	Vector<Sprite*> woodenBarrels;			// 木桶
 	Vector<Sprite*> ironDrums;				// 铁桶
-	Vector<Sprite*> bullets;				// 子弹
-	Vector<Sprite*> enemyBullets;			//敌人子弹
-	Vector<Sprite*> grenades;				//手榴弹
+	Vector<Sprite*> bullets;				// 玩家子弹
+	Vector<Sprite*> enemyBullets;			// 敌人子弹
+	Vector<Sprite*> grenades;				// 手雷
 
-	bool isJump;
 	bool isMove;
 	bool isAttack;
 	bool isCrouch;
+	bool isJump;
 	char moveDir;
 	char shootDir;
 	char lastCid;
 	char bulletLevel;
 };
 
-#endif // __THUNDER_H__
+#endif // __GAME_SCENE_H__

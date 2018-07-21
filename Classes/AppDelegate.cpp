@@ -1,4 +1,6 @@
 #include "AppDelegate.h"
+#include "IntroScene.h"
+#include "MsgScene.h"
 #include "GameScene.h"
 
 // #define USE_AUDIO_ENGINE 1
@@ -18,10 +20,10 @@ using namespace CocosDenshion;
 
 USING_NS_CC;
 
-static cocos2d::Size designResolutionSize = cocos2d::Size(560, 400);
+static cocos2d::Size designResolutionSize = cocos2d::Size(1120, 800);
 static cocos2d::Size smallResolutionSize = cocos2d::Size(560, 400);
-static cocos2d::Size mediumResolutionSize = cocos2d::Size(1024, 768);
-static cocos2d::Size largeResolutionSize = cocos2d::Size(2048, 1536);
+static cocos2d::Size mediumResolutionSize = cocos2d::Size(1120, 800);
+static cocos2d::Size largeResolutionSize = cocos2d::Size(2240, 1600);
 
 AppDelegate::AppDelegate()
 {
@@ -94,7 +96,7 @@ bool AppDelegate::applicationDidFinishLaunching() {
     register_all_packages();
 
     // create a scene. it's an autorelease object
-    auto scene = GameScene::createScene();
+    auto scene = IntroScene::createScene();
 
     // run
     director->runWithScene(scene);
