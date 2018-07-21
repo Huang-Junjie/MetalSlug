@@ -38,7 +38,7 @@ public:
 	void removeEnemy();			// 移除屏幕外一定距离的敌人
 	void enemyAction(float f);	// 敌人的动作
 	void enemyDead(Sprite* enemy);  //敌人死亡
-
+	void stopRun();
 	// implement the "static create()" method manually
 	CREATE_FUNC(GameScene);
 
@@ -62,6 +62,7 @@ private:
 	Vector<Sprite*> enemyBullets;			// 敌人子弹
 	Vector<Sprite*> grenades;				// 手雷
 
+	Layer* layer;
 	bool isMove;
 	bool isAttack;
 	bool isCrouch;

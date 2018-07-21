@@ -17,7 +17,10 @@ bool GameScene::init() {
 
 	visibleSize = Director::getInstance()->getVisibleSize();
 	origin = Director::getInstance()->getVisibleOrigin();
-
+	layer = Layer::create();
+	layer->setAnchorPoint(Vec2(0, 0));
+	layer->setPosition(Vec2(0, 0));
+	this->addChild(layer);
 	// background
 	map0 = Sprite::create("background_0.jpg");
 	map1 = Sprite::create("background_1.jpg");
@@ -34,10 +37,10 @@ bool GameScene::init() {
 	map2->setPosition(map1->getPositionX() + map2->getContentSize().width * 2, map0->getPositionY());
 	map3->setPosition(map2->getPositionX() + map3->getContentSize().width * 2, map0->getPositionY());
 
-	this->addChild(map0, 0);
-	this->addChild(map1, 0);
-	this->addChild(map2, 0);
-	this->addChild(map3, 0);
+	layer->addChild(map0, 0);
+	layer->addChild(map1, 0);
+	layer->addChild(map2, 0);
+	layer->addChild(map3, 0);
 
 	// player
 	player_head = Sprite::create("player_head.png");
@@ -53,8 +56,8 @@ bool GameScene::init() {
 	player_head->setFlipX(true);
 	player_leg->setFlipX(true);
 
-	this->addChild(player_leg, 3);
-	this->addChild(player_head, 3);	
+	layer->addChild(player_leg, 3);
+	layer->addChild(player_head, 3);
 
 	// 初始化变量
 	lastCid = 'D';
@@ -358,9 +361,9 @@ void GameScene::generateHostage() {
 	for (int i = 0; i < 10; i++) {
 		auto oldman = Sprite::create("oldman_0.png");
 		oldman->setScale(2);
-		auto x = cocos2d::random(50.0, (double)(4 * map0->getContentSize().width - 50));
+		auto x = cocos2d::random(50.0, (double)(4 * map0->getContentSize().width * 2- 50));
 		oldman->setPosition(Vec2(x, origin.y + 100 + oldman->getContentSize().height / 2));
-		this->addChild(oldman, 1);
+		layer->addChild(oldman, 1);
 		hostages.pushBack(oldman);
 		auto action = Animate::create(AnimationCache::getInstance()->getAnimation("oldman"));
 		oldman->runAction(RepeatForever::create(action));
@@ -377,28 +380,31 @@ void GameScene::generateEnemy() {
 	if (dir == 0) {
 		//从上面出现
 		auto x = cocos2d::random(50.0, (double)visibleSize.width - 50);
-		enemy->setPosition(Vec2(x, origin.y + visibleSize.height));
+		auto enemyWorldPosition = Vec2(x, origin.y + visibleSize.height);
+		auto enemyPosition = layer->convertToNodeSpace(enemyWorldPosition);
+		enemy->setPosition(enemyPosition);
 		enemy->setFlippedX(cocos2d::random(0, 1));
-		this->addChild(enemy, 1);
-		enemies.pushBack(enemy);
 		enemy->setName("downing");
-		auto moveDown = MoveTo::create(1, Vec2(x, origin.y + 100 + enemy->getContentSize().height / 2));
+		auto moveDown = MoveBy::create(1, Vec2(0, 100 + enemy->getContentSize().height / 2 - visibleSize.height));
 		enemy->runAction(Sequence::create(
 			moveDown,
 			CallFunc::create([=] {enemy->setName("downed"); }),
 			nullptr
 		));
-		return;
 	}
-	if (dir == 1) {
-		enemy->setPosition(Vec2(origin.x, origin.y + 100 + enemy->getContentSize().height / 2));
+	else if (dir == 1) {
+		auto enemyWorldPosition = Vec2(origin.x, origin.y + 100 + enemy->getContentSize().height / 2);
+		auto enemyPosition = layer->convertToNodeSpace(enemyWorldPosition);
+		enemy->setPosition(enemyPosition);
 		enemy->setFlippedX(true);
 	}
 	else {
-		enemy->setPosition(Vec2(origin.x + visibleSize.width, origin.y + 100 + enemy->getContentSize().height / 2));
+		auto enemyWorldPosition = Vec2(origin.x + visibleSize.width, origin.y + 100 + enemy->getContentSize().height / 2);
+		auto enemyPosition = layer->convertToNodeSpace(enemyWorldPosition);
+		enemy->setPosition(enemyPosition);
 		enemy->setFlippedX(false);
 	}
-	this->addChild(enemy, 1);
+	layer->addChild(enemy, 1);
 	enemies.pushBack(enemy);
 }
 
@@ -422,6 +428,12 @@ void GameScene::move(char dir) {
 		player_leg->runAction(player_run);
 	}
 
+	auto player_headPosition = player_head->getPosition();
+	auto player_headWorldPosition = layer->convertToWorldSpace(player_headPosition);
+
+	auto map3Position = map3->getPosition();
+	auto map3WorldPosition = layer->convertToWorldSpace(map3Position);
+
 	if (dir == 'A') {
 		if (lastCid != 'A') {
 			player_head->setFlipX(false);
@@ -430,10 +442,12 @@ void GameScene::move(char dir) {
 			shootDir = 'A';
 		}
 		lastCid = 'A';
-		
-		if (player_head->getPositionX() - player_head->getContentSize().width >= 0) {
+
+		if (player_headWorldPosition.x - player_head->getContentSize().width >= 0) {
 			auto moveBy1 = MoveBy::create(0.05f, Vec2(-10, 0));		
 			auto moveBy2 = MoveBy::create(0.05f, Vec2(-10, 0));
+			moveBy1->setFlags(3);
+			moveBy2->setFlags(3);
 			player_head->runAction(moveBy1);					
 			player_leg->runAction(moveBy2);	
 		}
@@ -447,41 +461,23 @@ void GameScene::move(char dir) {
 		}
 		lastCid = 'D';
 
-		if (player_head->getPositionX() * 2 >= visibleSize.width / 3) {
-			if (map3->getPositionX() + map3->getContentSize().width <= visibleSize.width) {
-				if (player_head->getPositionX() + player_head->getContentSize().width <= visibleSize.width) {
-					auto moveBy1 = MoveBy::create(0.05f, Vec2(10, 0));
-					auto moveBy2 = MoveBy::create(0.05f, Vec2(10, 0));
-					player_head->runAction(moveBy1);
-					player_leg->runAction(moveBy2);
-				}			
-			}
-			else {
-				map0->setPositionX(map0->getPositionX() - 10);
-				map1->setPositionX(map1->getPositionX() - 10);
-				map2->setPositionX(map2->getPositionX() - 10);
-				map3->setPositionX(map3->getPositionX() - 10);
-				auto it1 = enemies.begin();
-				for (; it1 != enemies.end(); it1++) {
-					(*it1)->setPositionX((*it1)->getPositionX() - 10);
-				}
-				auto it2 = hostages.begin();
-				for (; it2 != hostages.end(); it2++) {
-					(*it2)->setPositionX((*it2)->getPositionX() - 10);
-				}
-				auto it3 = grenades.begin();
-				for (; it3 != grenades.end(); it3++) {
-					(*it3)->setPositionX((*it3)->getPositionX() - 10);
-				}
-			}
-		}
-		else {
-			auto moveBy1 = MoveBy::create(0.05f, Vec2(10, 0));
-			auto moveBy2 = MoveBy::create(0.05f, Vec2(10, 0));
-			player_head->runAction(moveBy1);
-			player_leg->runAction(moveBy2);
+		auto moveBy1 = MoveBy::create(0.05f, Vec2(10, 0));
+		auto moveBy2 = MoveBy::create(0.05f, Vec2(10, 0));
+		moveBy1->setFlags(3);
+		moveBy2->setFlags(3);
+		player_head->runAction(moveBy1);
+		player_leg->runAction(moveBy2);
+
+		if (player_headWorldPosition.x >= visibleSize.width / 3 &&
+			map3WorldPosition.x + map3->getContentSize().width > visibleSize.width) {
+			auto moveBy1 = MoveBy::create(0.05f, Vec2(-10, 0));
+			moveBy1->setFlags(3);
+			layer->runAction(moveBy1);
 		}
 	}
+
+	//若玩家与敌人相遇，停止移动
+	stopRun();
 }
 
 void GameScene::attack() {
@@ -558,7 +554,7 @@ void GameScene::attack() {
 		bullet->setScale(2);
 		float posOffset = shootDir == 'A' ? -1 : 1;
 		bullet->setPosition(Vec2(player_head->getPosition().x + posOffset * 10, player_head->getPosition().y));
-		this->addChild(bullet, 1);
+		layer->addChild(bullet, 1);
 		bullets.pushBack(bullet);
 		bullet->runAction(Sequence::create(
 			MoveBy::create(5.0f, Vec2(posOffset * 2000, 0)),
@@ -620,12 +616,15 @@ void GameScene::fireInTheHole() {
 	grenade->setScale(2);
 	grenade->setPosition(player_head->getPosition());
 	grenades.pushBack(grenade);
-	this->addChild(grenade);
+	layer->addChild(grenade);
 
 	int param_shoot = shootDir == 'A' ? -1 : 1;
 	int y = isJump ? -(player_leg->getPositionY() - 100) : 0;
 	grenade->runAction(Sequence::create(
-		JumpBy::create(1.0f, Vec2(param_shoot * 500, y), 300, 1),
+		JumpBy::create(1.0f, Vec2(param_shoot * 400, y), 300, 1),
+		CallFunc::create([=]() {
+			grenade->setName("boom");
+		}),
 		Animate::create(AnimationCache::getInstance()->getAnimation("grenade_boom")),
 		CallFunc::create([=]() {
 			grenades.erase(grenades.getIndex(grenade));
@@ -637,12 +636,7 @@ void GameScene::fireInTheHole() {
 
 void GameScene::enemyAction(float f) {
 	//产生敌人
-	static int gtime = 0;
-	if (gtime <= 0) {
-		generateEnemy();
-		gtime = 3;
-	}
-	gtime--;
+	generateEnemy();
 
 	for (auto enemy : enemies) {
 		if (enemy->getName() == "dead" || enemy->getName() == "downing") continue;
@@ -677,7 +671,7 @@ void GameScene::enemyAction(float f) {
 					bullet->setScale(1.5);
 					int dir = bullet->isFlippedX() ? 1 : -1;
 					bullet->setPosition(enemy->getPosition());
-					addChild(bullet, 2);
+					layer->addChild(bullet, 2);
 					enemyBullets.pushBack(bullet);
 					bullet->runAction(Sequence::create(MoveBy::create(2, Vec2(visibleSize.width * dir, 0)),
 						CallFunc::create([=] {
@@ -749,6 +743,22 @@ void GameScene::testGetShot() {
 			}
 		}
 	}
+	//判断敌人中手榴弹
+	for (auto grenade : grenades) {
+		if (grenade->getName() != "boom") continue;
+		for (auto enemy : enemies) {
+			Rect grenadeRect = grenade->getBoundingBox();
+			Rect boomRect = Rect(grenadeRect.getMinX() - 100, grenadeRect.getMinY(),
+				grenadeRect.getMaxX() - grenadeRect.getMinX() + 200,
+				grenadeRect.getMaxY() - grenadeRect.getMinY());
+			if (boomRect.containsPoint(enemy->getPosition())) {
+				if (enemy->getName() != "dead") {
+					enemyDead(enemy);
+					return;
+				}
+			}
+		}
+	}
 }
 
 void GameScene::enemyDead(Sprite* enemy) {
@@ -767,11 +777,40 @@ void GameScene::enemyDead(Sprite* enemy) {
 void GameScene::removeEnemy() {
 	//删除屏幕外的敌人
 	for (auto enemy : enemies) {
-		if (enemy->getPositionX() < origin.x - 100 ||
-			enemy->getPositionX() > origin.x + visibleSize.width + 100) {
+		auto enemyPosition = enemy->getPosition();
+		auto enemyWorldPosition = layer->convertToWorldSpace(enemyPosition);
+		if (enemyWorldPosition.x < origin.x - 100 ||
+			enemyWorldPosition.x > origin.x + visibleSize.width + 100) {
 			enemy->removeFromParentAndCleanup(true);
 			enemies.erase(enemies.getIndex(enemy));
 			break;
+		}
+	}
+}
+
+void GameScene::stopRun() {
+	if (!isMove) return;
+	for (auto enemy : enemies) {
+		if (player_head->getPositionY() - enemy->getPositionY() > 50 ||
+			player_head->getPositionY() - enemy->getPositionY() < -50) 
+			return;
+		if (lastCid == 'A') {
+			if (player_head->getPositionX() > enemy->getPositionX() && 
+				player_head->getPositionX() < enemy->getPositionX() + 2 * enemy->getContentSize().width) {
+				player_head->stopActionsByFlags(3);
+				player_leg->stopActionsByFlags(3);
+				layer->stopActionsByFlags(3);
+				return;
+			}
+		}
+		else {
+			if (player_head->getPositionX() < enemy->getPositionX() &&
+				player_head->getPositionX() > enemy->getPositionX() - 2 * enemy->getContentSize().width) {
+				player_head->stopActionsByFlags(3);
+				player_leg->stopActionsByFlags(3);
+				layer->stopActionsByFlags(3);
+				return;
+			}
 		}
 	}
 }
